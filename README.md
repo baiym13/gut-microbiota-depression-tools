@@ -14,7 +14,7 @@ A suite of three interactive, client-side JavaScript tools for exploring associa
 ## 📸 Tool Previews
 
 ### Tool 1 – Literature Co-occurrence
-![Tool 1 Example](Tool1_example_Akkermansia_muciniphila_and_Inflammation.png)
+![Tool 1 Example](Tool1_example_Akkermansia_muciniphila_&_Inflammation.png)
 *Example: Akkermansia muciniphila ↔ Inflammation*
 
 ### Tool 2 – Clinical Trial Co-occurrence
