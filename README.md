@@ -18,7 +18,7 @@ A suite of three interactive, client-side JavaScript tools for exploring associa
 *Example: Akkermansia muciniphila ↔ Inflammation*
 
 ### Tool 2 – Clinical Trial Co-occurrence
-![Tool 2 Example](Tool2_example_Diabetes_Mellitus_and_Fecal_Microbiota_Transplantation.png)
+![Tool 2 Example](Tool2_example_Diabetes_Mellitus_&_Fecal_Microbiota_Transplantation.png)
 *Example: Diabetes Mellitus ↔ Fecal Microbiota Transplantation*
 
 ### Tool 3 – Keyword-Taxonomy Association
