@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Trial Co-occurrence · Dynamic Condition-Intervention + Graph</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
+        body { background: #f0f4f8; margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 2rem 1rem; }
+        .card { max-width: 1600px; width: 100%; background: white; border-radius: 2rem; box-shadow: 0 20px 35px -12px rgba(0,0,0,0.15); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #1a3c5e 0%, #0f2c44 100%); padding: 1.8rem 2rem; color: white; }
+        .header h1 { margin: 0 0 0.4rem 0; font-weight: 600; font-size: 1.9rem; letter-spacing: -0.3px; }
+        .header p { margin: 0; opacity: 0.85; font-size: 0.95rem; }
+        .content { padding: 2rem; }
+        .upload-area { background: #f8fafc; border-radius: 1.5rem; border: 1px dashed #cbd5e1; padding: 1.2rem 1.5rem; margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+        .upload-label { background: #2c7da0; color: white; padding: 0.6rem 1.4rem; border-radius: 2rem; cursor: pointer; font-size: 0.9rem; font-weight: 500; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; border: none; }
+        .upload-label:hover { background: #1f5e7a; transform: translateY(-1px); }
+        #fileInput { display: none; }
+        .file-info { font-size: 0.85rem; color: #2c5f8a; background: #eef2ff; padding: 0.4rem 1rem; border-radius: 2rem; }
+        .query-panel { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 2rem; background: #f9fafc; padding: 1.5rem; border-radius: 1.5rem; border: 1px solid #e2e8f0; align-items: flex-end; }
+        .input-group { flex: 1; min-width: 220px; position: relative; }
+        .input-group label { display: block; font-weight: 600; margin-bottom: 0.5rem; color: #0f2c44; font-size: 0.9rem; }
+        .input-group input { width: 100%; padding: 0.8rem 1rem; border: 1px solid #cbd5e1; border-radius: 1rem; font-size: 0.95rem; transition: 0.2s; background: white; }
+        .input-group input:focus { outline: none; border-color: #2c7da0; box-shadow: 0 0 0 3px rgba(44,125,160,0.2); }
+        .input-group input:disabled { background: #f1f5f9; color: #64748b; }
+        .suggestions-box { position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: white; border: 1px solid #cbd5e1; border-radius: 1rem; max-height: 260px; overflow-y: auto; z-index: 1000; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); margin-top: 4px; display: none; }
+        .suggestions-box.active { display: block !important; }
+        .suggestion-item { padding: 0.7rem 1rem; cursor: pointer; border-bottom: 1px solid #f0f2f5; font-size: 0.85rem; transition: 0.05s linear; display: flex; justify-content: space-between; align-items: center; }
+        .suggestion-item:hover { background-color: #e6f0f5; }
+        .suggestion-item:last-child { border-bottom: none; }
+        .suggestion-item .badge-count { font-size: 0.7rem; color: #1e40af; background: #dbeafe; padding: 0.1rem 0.6rem; border-radius: 1rem; }
+        .button-group { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        button { background: #2c7da0; border: none; color: white; font-weight: 600; padding: 0.8rem 1.6rem; border-radius: 2rem; cursor: pointer; font-size: 0.9rem; transition: 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        button:hover:not(:disabled) { background: #1f5e7a; transform: translateY(-1px); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        button.secondary { background: #4b5563; }
+        button.secondary:hover:not(:disabled) { background: #374151; }
+        .status { margin: 1rem 0; padding: 0.8rem 1rem; border-radius: 1rem; background: #eef2ff; color: #1e3a8a; font-size: 0.9rem; border-left: 4px solid #2c7da0; word-break: break-word; }
+        .result-container { margin-top: 1.5rem; }
+        .stats-card { background: #eef2ff; border-radius: 1.2rem; padding: 0.8rem 1.2rem; margin-bottom: 1.5rem; display: inline-block; font-weight: 500; }
+        .table-wrap { background: white; border: 1px solid #e2e8f0; border-radius: 1.2rem; overflow-x: auto; box-shadow: 0 2px 6px rgba(0,0,0,0.03); max-height: 600px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th { background: #f1f5f9; padding: 0.8rem 0.8rem; text-align: left; font-weight: 600; color: #1e293b; border-bottom: 1px solid #e2e8f0; white-space: nowrap; position: sticky; top: 0; z-index: 10; }
+        td { padding: 0.7rem 0.8rem; border-bottom: 1px solid #f0f2f5; vertical-align: top; word-break: break-word; max-width: 300px; }
+        tr:last-child td { border-bottom: none; }
+        .link-btn { background: #e9f0f5; color: #1f5e7a; text-decoration: none; padding: 0.2rem 0.7rem; border-radius: 2rem; font-weight: 500; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; border: 1px solid #cbdde6; }
+        .link-btn:hover { background: #cfe3ed; color: #0f3b4f; }
+        .badge { background: #dbeafe; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.7rem; font-weight: 500; color: #1e40af; display: inline-block; margin: 1px 0; }
+        .empty-msg { padding: 2rem; text-align: center; color: #5f6c7a; font-style: italic; }
+        footer { font-size: 0.75rem; text-align: center; border-top: 1px solid #e9edf2; padding: 1rem; color: #6c7a8a; background: #fafcff; }
+        .detail-toggle { cursor: pointer; color: #2c7da0; font-weight: 500; background: none; border: none; padding: 0.2rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; }
+        .detail-toggle:hover { background: #e6f0f5; }
+        .collapsible-detail { display: none; background: #f8fafc; padding: 0.5rem 0.8rem; border-radius: 0.5rem; margin-top: 0.3rem; font-size: 0.8rem; border-left: 3px solid #2c7da0; }
+        .collapsible-detail.open { display: block; }
+        .field-label { font-weight: 600; color: #1e293b; margin-right: 0.3rem; }
+        .hint { font-size: 0.75rem; color: #64748b; margin-top: 0.2rem; min-height: 1.2rem; }
+
+        /* Graph styles */
+        .graph-container {
+            margin: 1.5rem 0 0.5rem 0;
+            padding: 0.8rem;
+            background: #fafcfe;
+            border-radius: 1.5rem;
+            border: 1px solid #e2e8f0;
+            width: 100%;
+            overflow-x: auto;
+        }
+        .graph-container svg {
+            display: block;
+            margin: 0 auto;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        }
+        .graph-title {
+            font-weight: 600;
+            margin-bottom: 0.6rem;
+            color: #0f2c44;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .graph-title small {
+            font-weight: 400;
+            font-size: 0.8rem;
+            color: #4a5c6e;
+        }
+        .legend-tip {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+            color: #2c4c6e;
+            background: #eef6fa;
+            padding: 0.2rem 1rem;
+            border-radius: 2rem;
+        }
+        .legend-tip span {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .legend-tip .cond-color { background: #1f5e7a; }
+        .legend-tip .int-color { background: #c47b3a; }
+        .legend-tip .both-color { background: #5a8a4a; }
+        .graph-sub {
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: #4a5c6e;
+            background: #f0f4f8;
+            padding: 0.3rem 1rem;
+            border-radius: 2rem;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="header">
+        <h1>📋 Trial Co‑occurrence · Dynamic Condition ↔ Intervention + Graph</h1>
+        <p>Upload Excel with three sheets: <strong>Condition</strong> (Nct_id, Standard_condition), <strong>Intervention</strong> (Nct_id, Standard_intervention), and <strong>NCT_info</strong> (full trial details).<br>
+        <span style="opacity:0.8;">Type in Condition → Intervention dropdown automatically shows only co‑occurring terms. Graph visualizes co‑occurrence network.</span></p>
+    </div>
+    <div class="content">
+        <div class="upload-area">
+            <label class="upload-label" for="fileInput">📂 Select Excel file (.xlsx, .xls)</label>
+            <input type="file" id="fileInput" accept=".xlsx, .xls">
+            <div id="fileInfo" class="file-info">No file loaded</div>
+        </div>
+
+        <div class="query-panel">
+            <div class="input-group">
+                <label>🩺 Standard Condition</label>
+                <input type="text" id="conditionInput" placeholder="e.g. Diabetes" autocomplete="off" disabled>
+                <div id="conditionSuggestions" class="suggestions-box"></div>
+                <div class="hint" id="condHint">Type a condition to filter interventions</div>
+            </div>
+            <div class="input-group">
+                <label>💊 Standard Intervention</label>
+                <input type="text" id="interventionInput" placeholder="e.g. Metformin" autocomplete="off" disabled>
+                <div id="interventionSuggestions" class="suggestions-box"></div>
+                <div class="hint" id="intHint">Interventions co-occurring with your condition will appear here</div>
+            </div>
+            <div class="button-group">
+                <button id="searchBtn" disabled>🔍 Query</button>
+                <button id="resetBtn" class="secondary" disabled>⟳ Clear</button>
+            </div>
+        </div>
+
+        <div id="statusMessage" class="status">📌 Please upload an Excel file with three sheets: "Condition", "Intervention", "NCT_info".</div>
+        <div id="resultArea" class="result-container"></div>
+    </div>
+    <footer>⚡ Type in Condition → Intervention dropdown updates automatically with co‑occurring terms. Graph shows co‑occurrence network with edge counts.</footer>
+</div>
+
+<script>
+    // ---------- Global data ----------
+    let conditionMap = new Map();
+    let interventionMap = new Map();
+    let nctInfoMap = new Map();
+    let allConditionTerms = new Set();
+    let allInterventionTerms = new Set();
+    let excelLoaded = false;
+    let condToInterventions = new Map();
+    let intToConditions = new Map();
+
+    // DOM refs
+    const conditionInput = document.getElementById('conditionInput');
+    const interventionInput = document.getElementById('interventionInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusDiv = document.getElementById('statusMessage');
+    const resultArea = document.getElementById('resultArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfoDiv = document.getElementById('fileInfo');
+    const condSugg = document.getElementById('conditionSuggestions');
+    const intSugg = document.getElementById('interventionSuggestions');
+    const condHint = document.getElementById('condHint');
+    const intHint = document.getElementById('intHint');
+
+    function cleanStr(v) { return (v === undefined || v === null) ? '' : String(v).trim(); }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+    }
+
+    function setStatus(msg, isError = false) {
+        statusDiv.innerHTML = msg;
+        statusDiv.style.background = isError ? '#fee2e2' : '#eef2ff';
+        statusDiv.style.borderLeftColor = isError ? '#dc2626' : '#2c7da0';
+        statusDiv.style.color = isError ? '#991b1b' : '#1e3a8a';
+    }
+
+    function setControlsEnabled(enabled) {
+        conditionInput.disabled = !enabled;
+        interventionInput.disabled = !enabled;
+        searchBtn.disabled = !enabled;
+        resetBtn.disabled = !enabled;
+    }
+
+    // Build co-occurrence maps
+    function buildMaps() {
+        allConditionTerms.clear();
+        allInterventionTerms.clear();
+        condToInterventions.clear();
+        intToConditions.clear();
+
+        for (const [nct, condSet] of conditionMap) {
+            for (const c of condSet) {
+                allConditionTerms.add(c);
+                if (!condToInterventions.has(c)) condToInterventions.set(c, new Set());
+            }
+        }
+        for (const [nct, intSet] of interventionMap) {
+            for (const i of intSet) {
+                allInterventionTerms.add(i);
+                if (!intToConditions.has(i)) intToConditions.set(i, new Set());
+            }
+        }
+
+        const allNcts = new Set([...conditionMap.keys(), ...interventionMap.keys()]);
+        for (const nct of allNcts) {
+            const conds = conditionMap.get(nct) || new Set();
+            const ints = interventionMap.get(nct) || new Set();
+            for (const c of conds) {
+                for (const i of ints) {
+                    condToInterventions.get(c).add(i);
+                    intToConditions.get(i).add(c);
+                }
+            }
+        }
+    }
+
+    // Get interventions that co-occur with a given condition
+    function getCooccurringInterventions(conditionVal) {
+        const val = cleanStr(conditionVal);
+        if (!val) return new Set();
+        const result = new Set();
+        for (const [int, condSet] of intToConditions) {
+            for (const cond of condSet) {
+                if (cond.localeCompare(val, undefined, { sensitivity: 'base' }) === 0) {
+                    result.add(int);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    // Get conditions that co-occur with a given intervention
+    function getCooccurringConditions(interventionVal) {
+        const val = cleanStr(interventionVal);
+        if (!val) return new Set();
+        const result = new Set();
+        for (const [cond, intSet] of condToInterventions) {
+            for (const int of intSet) {
+                if (int.localeCompare(val, undefined, { sensitivity: 'base' }) === 0) {
+                    result.add(cond);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    // ---------- Graph building ----------
+    function buildCooccurrenceGraph(condTerm, intTerm) {
+        const c = cleanStr(condTerm);
+        const i = cleanStr(intTerm);
+        if (!c && !i || !excelLoaded) return { nodes: [], links: [] };
+
+        const nodes = [];
+        const links = [];
+        const nodeSet = new Set();
+
+        // Helper to add node
+        function addNode(id, group, count = 0) {
+            if (!nodeSet.has(id)) {
+                nodeSet.add(id);
+                const size = group === 'condition' ? 28 : group === 'intervention' ? 24 : 20;
+                nodes.push({ id, group, count, size: Math.max(12, Math.min(40, size + count * 1.5)) });
+            }
+        }
+
+        // If both terms are provided, build full graph
+        if (c && i) {
+            // Center nodes: condition and intervention
+            addNode(c, 'condition', 0);
+            addNode(i, 'intervention', 0);
+
+            // Find all NCTs that have both
+            const condNcts = new Set();
+            for (const [nct, condSet] of conditionMap) {
+                for (const cond of condSet) {
+                    if (cond.localeCompare(c, undefined, { sensitivity: 'base' }) === 0) {
+                        condNcts.add(nct);
+                    }
+                }
+            }
+            const intNcts = new Set();
+            for (const [nct, intSet] of interventionMap) {
+                for (const intv of intSet) {
+                    if (intv.localeCompare(i, undefined, { sensitivity: 'base' }) === 0) {
+                        intNcts.add(nct);
+                    }
+                }
+            }
+            const commonNcts = [...condNcts].filter(nct => intNcts.has(nct));
+
+            // Count co-occurring conditions and interventions from these NCTs
+            const condCount = new Map();
+            const intCount = new Map();
+            for (const nct of commonNcts) {
+                const conds = conditionMap.get(nct) || new Set();
+                const ints = interventionMap.get(nct) || new Set();
+                for (const cond of conds) {
+                    if (cond.localeCompare(c, undefined, { sensitivity: 'base' }) !== 0) {
+                        condCount.set(cond, (condCount.get(cond) || 0) + 1);
+                    }
+                }
+                for (const intv of ints) {
+                    if (intv.localeCompare(i, undefined, { sensitivity: 'base' }) !== 0) {
+                        intCount.set(intv, (intCount.get(intv) || 0) + 1);
+                    }
+                }
+            }
+
+            // Add condition nodes and links to center condition
+            for (const [cond, count] of condCount) {
+                addNode(cond, 'condition', count);
+                links.push({ source: c, target: cond, value: count, type: 'condition' });
+            }
+            // Add intervention nodes and links to center intervention
+            for (const [intv, count] of intCount) {
+                addNode(intv, 'intervention', count);
+                links.push({ source: i, target: intv, value: count, type: 'intervention' });
+            }
+
+            // Also link the two center nodes if they co-occur
+            const centerLinkCount = commonNcts.length;
+            if (centerLinkCount > 0) {
+                links.push({ source: c, target: i, value: centerLinkCount, type: 'both' });
+            }
+
+            // Add secondary links: conditions connected to interventions (through common NCTs)
+            // This creates a richer network: condition nodes connect to intervention nodes
+            const condIntLinks = new Map();
+            for (const nct of commonNcts) {
+                const conds = conditionMap.get(nct) || new Set();
+                const ints = interventionMap.get(nct) || new Set();
+                for (const cond of conds) {
+                    if (cond.localeCompare(c, undefined, { sensitivity: 'base' }) === 0) continue;
+                    for (const intv of ints) {
+                        if (intv.localeCompare(i, undefined, { sensitivity: 'base' }) === 0) continue;
+                        const key = cond + '|||' + intv;
+                        condIntLinks.set(key, (condIntLinks.get(key) || 0) + 1);
+                    }
+                }
+            }
+            for (const [key, count] of condIntLinks) {
+                const [cond, intv] = key.split('|||');
+                if (nodeSet.has(cond) && nodeSet.has(intv)) {
+                    links.push({ source: cond, target: intv, value: count, type: 'cross' });
+                }
+            }
+
+        } else if (c) {
+            // Only condition provided: show condition-centric graph
+            addNode(c, 'condition', 0);
+            const cooccurringInts = getCooccurringInterventions(c);
+            for (const intv of cooccurringInts) {
+                const count = (intToConditions.get(intv) || new Set()).size;
+                addNode(intv, 'intervention', count);
+                links.push({ source: c, target: intv, value: count, type: 'condition' });
+            }
+            // Also add other conditions that share interventions
+            const condCondLinks = new Map();
+            for (const intv of cooccurringInts) {
+                const conds = intToConditions.get(intv) || new Set();
+                for (const otherCond of conds) {
+                    if (otherCond.localeCompare(c, undefined, { sensitivity: 'base' }) === 0) continue;
+                    const key = c + '|||' + otherCond;
+                    condCondLinks.set(key, (condCondLinks.get(key) || 0) + 1);
+                }
+            }
+            for (const [key, count] of condCondLinks) {
+                const [src, tgt] = key.split('|||');
+                if (nodeSet.has(src) && nodeSet.has(tgt)) {
+                    links.push({ source: src, target: tgt, value: count, type: 'cross' });
+                }
+            }
+
+        } else if (i) {
+            // Only intervention provided: show intervention-centric graph
+            addNode(i, 'intervention', 0);
+            const cooccurringConds = getCooccurringConditions(i);
+            for (const cond of cooccurringConds) {
+                const count = (condToInterventions.get(cond) || new Set()).size;
+                addNode(cond, 'condition', count);
+                links.push({ source: i, target: cond, value: count, type: 'intervention' });
+            }
+            // Also add other interventions that share conditions
+            const intIntLinks = new Map();
+            for (const cond of cooccurringConds) {
+                const ints = condToInterventions.get(cond) || new Set();
+                for (const otherInt of ints) {
+                    if (otherInt.localeCompare(i, undefined, { sensitivity: 'base' }) === 0) continue;
+                    const key = i + '|||' + otherInt;
+                    intIntLinks.set(key, (intIntLinks.get(key) || 0) + 1);
+                }
+            }
+            for (const [key, count] of intIntLinks) {
+                const [src, tgt] = key.split('|||');
+                if (nodeSet.has(src) && nodeSet.has(tgt)) {
+                    links.push({ source: src, target: tgt, value: count, type: 'cross' });
+                }
+            }
+        }
+
+        return { nodes, links };
+    }
+
+    // ---------- D3 graph renderer ----------
+    function renderGraph(graphData, containerId = 'graphContainer') {
+        d3.select(`#${containerId}`).selectAll('*').remove();
+
+        if (!graphData || graphData.nodes.length <= 1) {
+            d3.select(`#${containerId}`)
+                .append('div')
+                .style('padding', '1.5rem')
+                .style('text-align', 'center')
+                .style('color', '#6b7a8a')
+                .text('⚠️ Not enough nodes to render graph.');
+            return;
+        }
+
+        const width = 820, height = 500;
+        const svg = d3.select(`#${containerId}`)
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height)
+            .style('background', '#ffffff')
+            .style('border-radius', '12px');
+
+        const g = svg.append('g');
+
+        const colorMap = {
+            'condition': '#1f5e7a',
+            'intervention': '#c47b3a',
+            'both': '#5a8a4a'
+        };
+
+        const simulation = d3.forceSimulation(graphData.nodes)
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(130))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide(40));
+
+        // Links
+        const link = g.append('g')
+            .selectAll('line')
+            .data(graphData.links)
+            .enter().append('line')
+            .attr('stroke', d => colorMap[d.type] || '#9aa9b9')
+            .attr('stroke-width', d => Math.max(1.5, Math.min(4, d.value * 0.5)))
+            .attr('stroke-opacity', 0.7);
+
+        // Link labels (count)
+        const linkText = g.append('g')
+            .selectAll('text')
+            .data(graphData.links)
+            .enter().append('text')
+            .attr('fill', '#1f3a5e')
+            .attr('font-size', '9px')
+            .attr('font-weight', 'bold')
+            .attr('text-anchor', 'middle')
+            .attr('dy', -6)
+            .text(d => d.value);
+
+        // Nodes
+        const node = g.append('g')
+            .selectAll('circle')
+            .data(graphData.nodes)
+            .enter().append('circle')
+            .attr('r', d => d.size || 18)
+            .attr('fill', d => d.group === 'condition' ? '#1f5e7a' : d.group === 'intervention' ? '#c47b3a' : '#5a8a4a')
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 2)
+            .call(d3.drag()
+                .on('start', (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                })
+                .on('drag', (event, d) => {
+                    d.fx = event.x;
+                    d.fy = event.y;
+                })
+                .on('end', (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0);
+                    d.fx = null;
+                    d.fy = null;
+                })
+            );
+
+        // Node labels
+        const label = g.append('g')
+            .selectAll('text')
+            .data(graphData.nodes)
+            .enter().append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', d => (d.size || 18) + 6)
+            .attr('fill', '#1f2a3a')
+            .attr('font-size', d => (d.size || 18) > 28 ? '11px' : '9px')
+            .attr('font-weight', d => (d.size || 18) > 28 ? 'bold' : 'normal')
+            .text(d => d.id.length > 18 ? d.id.slice(0, 16) + '…' : d.id);
+
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            linkText
+                .attr('x', d => (d.source.x + d.target.x) / 2)
+                .attr('y', d => (d.source.y + d.target.y) / 2 - 8);
+
+            node
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
+
+            label
+                .attr('x', d => d.x)
+                .attr('y', d => d.y + (d.size || 18) + 6);
+        });
+
+        node.append('title')
+            .text(d => `${d.id} (${d.group}, count: ${d.count || 0})`);
+    }
+
+    // ---------- Query & render ----------
+    function queryCooccurrence(condTerm, intTerm) {
+        if (!excelLoaded) return { nctIds: [], details: [] };
+        const c = cleanStr(condTerm);
+        const i = cleanStr(intTerm);
+        if (!c || !i) return { nctIds: [], details: [] };
+
+        const condNcts = new Set();
+        for (const [nct, condSet] of conditionMap) {
+            for (const cond of condSet) {
+                if (cond.localeCompare(c, undefined, { sensitivity: 'base' }) === 0) {
+                    condNcts.add(nct);
+                }
+            }
+        }
+
+        const intNcts = new Set();
+        for (const [nct, intSet] of interventionMap) {
+            for (const intv of intSet) {
+                if (intv.localeCompare(i, undefined, { sensitivity: 'base' }) === 0) {
+                    intNcts.add(nct);
+                }
+            }
+        }
+
+        const common = [...condNcts].filter(nct => intNcts.has(nct));
+        const details = common.map(nct => {
+            const info = nctInfoMap.get(nct) || {};
+            return {
+                Nct_id: nct,
+                'Study Title': info['Study Title'] || '',
+                'Study URL': info['Study URL'] || '',
+                'Conditions': info['Conditions'] || '',
+                'Interventions': info['Interventions'] || ''
+            };
+        });
+
+        return { nctIds: common, details };
+    }
+
+    function renderResults(result, condTerm, intTerm) {
+        const { nctIds, details } = result;
+        const graphData = buildCooccurrenceGraph(condTerm, intTerm);
+
+        let html = '';
+
+        // Table
+        if (!nctIds.length) {
+            html += `<div class="empty-msg">🔍 No trials found with Condition “${escapeHtml(condTerm)}” and Intervention “${escapeHtml(intTerm)}”.</div>`;
+        } else {
+            let rowsHtml = '';
+            for (const rec of details) {
+                const nct = escapeHtml(rec.Nct_id || '');
+                const title = escapeHtml(rec['Study Title'] || '—');
+                const studyUrl = rec['Study URL'] ? escapeHtml(rec['Study URL']) : '';
+                const conditions = escapeHtml(rec['Conditions'] || '—');
+                const interventions = escapeHtml(rec['Interventions'] || '—');
+
+                rowsHtml += `
+                    <tr>
+                        <td><strong>${nct}</strong></td>
+                        <td>
+                            ${title}
+                            ${studyUrl ? `<br><a href="${studyUrl}" target="_blank" class="link-btn" style="margin-top:4px;">🔗 Study URL</a>` : ''}
+                        </td>
+                        <td>${conditions}</td>
+                        <td>${interventions}</td>
+                    </tr>
+                `;
+            }
+
+            html += `
+                <div class="stats-card">
+                    🎯 <strong>${nctIds.length}</strong> trial(s) found with Condition <strong>“${escapeHtml(condTerm)}”</strong> and Intervention <strong>“${escapeHtml(intTerm)}”</strong>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="min-width:120px;">NCT ID</th>
+                                <th style="min-width:250px;">Study Title & URL</th>
+                                <th style="min-width:200px;">Conditions</th>
+                                <th style="min-width:200px;">Interventions</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // Graph
+        const hasGraph = graphData.nodes.length > 1;
+        const condDisplay = condTerm ? escapeHtml(condTerm) : '(none)';
+        const intDisplay = intTerm ? escapeHtml(intTerm) : '(none)';
+        html += `<div class="graph-container">
+                    <div class="graph-title">
+                        <span>🧬 Co‑occurrence network</span>
+                        <small>Node size = connection strength · Edge label = count</small>
+                        <span class="legend-tip">
+                            <span class="cond-color"></span> Condition
+                            <span class="int-color"></span> Intervention
+                            <span class="both-color"></span> Cross-link
+                        </span>
+                    </div>
+                    <div style="font-size:0.8rem; color:#4a5c6e; margin-bottom:0.5rem;">
+                        ${condTerm ? `🩺 Center: ${condDisplay}` : ''}
+                        ${condTerm && intTerm ? ' & ' : ''}
+                        ${intTerm ? `💊 Center: ${intDisplay}` : ''}
+                        ${!condTerm && !intTerm ? '🔹 Select a condition or intervention to see the network' : ''}
+                    </div>
+                    <div id="graphContainer" style="width:100%; min-height:200px;"></div>
+                </div>`;
+
+        resultArea.innerHTML = html;
+
+        if (hasGraph) {
+            renderGraph(graphData, 'graphContainer');
+        } else {
+            const container = document.getElementById('graphContainer');
+            if (container) {
+                container.innerHTML = `<div style="padding:2rem;text-align:center;color:#6b7a8a;">🔹 Enter a condition and/or intervention to build the co‑occurrence network.</div>`;
+            }
+        }
+
+        const countMsg = nctIds.length ? `${nctIds.length} trial(s)` : 'No trials';
+        setStatus(`✅ ${countMsg} found. Graph updated with ${graphData.nodes.length} nodes and ${graphData.links.length} edges.`, false);
+    }
+
+    // ---------- Populate dropdowns ----------
+    function populateInterventionDropdown(conditionVal) {
+        const val = cleanStr(conditionVal);
+        if (!val || !excelLoaded) {
+            intSugg.classList.remove('active');
+            intSugg.innerHTML = '';
+            intHint.textContent = 'Enter a condition to see co-occurring interventions';
+            return;
+        }
+
+        const cooccurring = getCooccurringInterventions(val);
+        if (cooccurring.size === 0) {
+            intSugg.classList.remove('active');
+            intSugg.innerHTML = '';
+            intHint.textContent = `⚠️ No interventions found co-occurring with "${val}"`;
+            return;
+        }
+
+        const sorted = Array.from(cooccurring).sort((a, b) => a.localeCompare(b));
+        let html = '';
+        for (const term of sorted) {
+            const count = (intToConditions.get(term) || new Set()).size;
+            const badge = count > 0 ? `<span class="badge-count">${count} linked</span>` : '';
+            html += `<div class="suggestion-item" data-value="${escapeHtml(term)}">${escapeHtml(term)} ${badge}</div>`;
+        }
+        intSugg.innerHTML = html;
+        intSugg.classList.add('active');
+        intHint.textContent = `🔗 ${cooccurring.size} intervention(s) co-occurring with "${val}" — click to select`;
+
+        intSugg.querySelectorAll('.suggestion-item').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const value = this.getAttribute('data-value') || this.textContent.trim();
+                interventionInput.value = value;
+                intSugg.classList.remove('active');
+                updateConditionDropdown(value);
+                interventionInput.focus();
+                intHint.textContent = `✅ Selected: "${value}"`;
+                // Trigger graph update
+                const cond = conditionInput.value.trim();
+                const intv = interventionInput.value.trim();
+                if (cond || intv) {
+                    const graphData = buildCooccurrenceGraph(cond, intv);
+                    renderGraphOnly(graphData);
+                }
+            });
+        });
+    }
+
+    function populateConditionDropdown(interventionVal) {
+        const val = cleanStr(interventionVal);
+        if (!val || !excelLoaded) {
+            condSugg.classList.remove('active');
+            condSugg.innerHTML = '';
+            condHint.textContent = 'Enter a condition to filter interventions';
+            return;
+        }
+
+        const cooccurring = getCooccurringConditions(val);
+        if (cooccurring.size === 0) {
+            condSugg.classList.remove('active');
+            condSugg.innerHTML = '';
+            condHint.textContent = `⚠️ No conditions found co-occurring with "${val}"`;
+            return;
+        }
+
+        const sorted = Array.from(cooccurring).sort((a, b) => a.localeCompare(b));
+        let html = '';
+        for (const term of sorted) {
+            const count = (condToInterventions.get(term) || new Set()).size;
+            const badge = count > 0 ? `<span class="badge-count">${count} linked</span>` : '';
+            html += `<div class="suggestion-item" data-value="${escapeHtml(term)}">${escapeHtml(term)} ${badge}</div>`;
+        }
+        condSugg.innerHTML = html;
+        condSugg.classList.add('active');
+        condHint.textContent = `🔗 ${cooccurring.size} condition(s) co-occurring with "${val}" — click to select`;
+
+        condSugg.querySelectorAll('.suggestion-item').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const value = this.getAttribute('data-value') || this.textContent.trim();
+                conditionInput.value = value;
+                condSugg.classList.remove('active');
+                populateInterventionDropdown(value);
+                conditionInput.focus();
+                condHint.textContent = `✅ Selected: "${value}"`;
+                // Trigger graph update
+                const cond = conditionInput.value.trim();
+                const intv = interventionInput.value.trim();
+                if (cond || intv) {
+                    const graphData = buildCooccurrenceGraph(cond, intv);
+                    renderGraphOnly(graphData);
+                }
+            });
+        });
+    }
+
+    function updateInterventionDropdown(conditionVal) {
+        populateInterventionDropdown(conditionVal);
+    }
+
+    function updateConditionDropdown(interventionVal) {
+        populateConditionDropdown(interventionVal);
+    }
+
+    function showConditionSuggestions(filterText) {
+        const search = cleanStr(filterText).toLowerCase();
+        if (!search || allConditionTerms.size === 0) {
+            condSugg.classList.remove('active');
+            condSugg.innerHTML = '';
+            return;
+        }
+        const matched = Array.from(allConditionTerms)
+            .filter(t => t.toLowerCase().includes(search))
+            .sort((a, b) => a.localeCompare(b));
+        if (!matched.length) {
+            condSugg.classList.remove('active');
+            condSugg.innerHTML = '';
+            return;
+        }
+        const limited = matched.slice(0, 20);
+        let html = '';
+        for (const term of limited) {
+            const count = (condToInterventions.get(term) || new Set()).size;
+            const badge = count > 0 ? `<span class="badge-count">${count} linked</span>` : '';
+            html += `<div class="suggestion-item" data-value="${escapeHtml(term)}">${escapeHtml(term)} ${badge}</div>`;
+        }
+        condSugg.innerHTML = html;
+        condSugg.classList.add('active');
+
+        condSugg.querySelectorAll('.suggestion-item').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const value = this.getAttribute('data-value') || this.textContent.trim();
+                conditionInput.value = value;
+                condSugg.classList.remove('active');
+                populateInterventionDropdown(value);
+                conditionInput.focus();
+                condHint.textContent = `✅ Selected: "${value}"`;
+                const cond = conditionInput.value.trim();
+                const intv = interventionInput.value.trim();
+                if (cond || intv) {
+                    const graphData = buildCooccurrenceGraph(cond, intv);
+                    renderGraphOnly(graphData);
+                }
+            });
+        });
+    }
+
+    function showInterventionSuggestions(filterText) {
+        const search = cleanStr(filterText).toLowerCase();
+        if (!search || allInterventionTerms.size === 0) {
+            intSugg.classList.remove('active');
+            intSugg.innerHTML = '';
+            return;
+        }
+        const matched = Array.from(allInterventionTerms)
+            .filter(t => t.toLowerCase().includes(search))
+            .sort((a, b) => a.localeCompare(b));
+        if (!matched.length) {
+            intSugg.classList.remove('active');
+            intSugg.innerHTML = '';
+            return;
+        }
+        const limited = matched.slice(0, 20);
+        let html = '';
+        for (const term of limited) {
+            const count = (intToConditions.get(term) || new Set()).size;
+            const badge = count > 0 ? `<span class="badge-count">${count} linked</span>` : '';
+            html += `<div class="suggestion-item" data-value="${escapeHtml(term)}">${escapeHtml(term)} ${badge}</div>`;
+        }
+        intSugg.innerHTML = html;
+        intSugg.classList.add('active');
+
+        intSugg.querySelectorAll('.suggestion-item').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const value = this.getAttribute('data-value') || this.textContent.trim();
+                interventionInput.value = value;
+                intSugg.classList.remove('active');
+                populateConditionDropdown(value);
+                interventionInput.focus();
+                intHint.textContent = `✅ Selected: "${value}"`;
+                const cond = conditionInput.value.trim();
+                const intv = interventionInput.value.trim();
+                if (cond || intv) {
+                    const graphData = buildCooccurrenceGraph(cond, intv);
+                    renderGraphOnly(graphData);
+                }
+            });
+        });
+    }
+
+    function hideAllSuggestions() {
+        condSugg.classList.remove('active');
+        intSugg.classList.remove('active');
+    }
+
+    // Render graph only (for live updates)
+    function renderGraphOnly(graphData) {
+        const container = document.getElementById('graphContainer');
+        if (!container) return;
+        const hasGraph = graphData.nodes.length > 1;
+        if (hasGraph) {
+            renderGraph(graphData, 'graphContainer');
+        } else {
+            container.innerHTML = `<div style="padding:2rem;text-align:center;color:#6b7a8a;">🔹 Enter a condition and/or intervention to build the co‑occurrence network.</div>`;
+        }
+    }
+
+    // ---------- Parse workbook ----------
+    function parseWorkbook(workbook) {
+        const condKey = Object.keys(workbook.Sheets).find(k => k.trim().toLowerCase() === 'condition');
+        const intKey = Object.keys(workbook.Sheets).find(k => k.trim().toLowerCase() === 'intervention');
+        const infoKey = Object.keys(workbook.Sheets).find(k => k.trim().toLowerCase() === 'nct_info');
+
+        if (!condKey) throw new Error('Sheet "Condition" not found');
+        if (!intKey) throw new Error('Sheet "Intervention" not found');
+        if (!infoKey) throw new Error('Sheet "NCT_info" not found');
+
+        let condRows = XLSX.utils.sheet_to_json(workbook.Sheets[condKey], { defval: "" });
+        let intRows = XLSX.utils.sheet_to_json(workbook.Sheets[intKey], { defval: "" });
+        let infoRows = XLSX.utils.sheet_to_json(workbook.Sheets[infoKey], { defval: "" });
+
+        if (!condRows || !condRows.length) throw new Error('Condition sheet is empty');
+        if (!intRows || !intRows.length) throw new Error('Intervention sheet is empty');
+        if (!infoRows || !infoRows.length) throw new Error('NCT_info sheet is empty');
+
+        conditionMap.clear();
+        for (const row of condRows) {
+            const nct = cleanStr(row['Nct_id'] || row['NCT_ID'] || row['nct_id'] || '');
+            const cond = cleanStr(row['Standard_condition'] || row['Standard_Condition'] || row['standard_condition'] || '');
+            if (nct && cond) {
+                if (!conditionMap.has(nct)) conditionMap.set(nct, new Set());
+                conditionMap.get(nct).add(cond);
+            }
+        }
+
+        interventionMap.clear();
+        for (const row of intRows) {
+            const nct = cleanStr(row['Nct_id'] || row['NCT_ID'] || row['nct_id'] || '');
+            const intv = cleanStr(row['Standard_intervention'] || row['Standard_Intervention'] || row['standard_intervention'] || '');
+            if (nct && intv) {
+                if (!interventionMap.has(nct)) interventionMap.set(nct, new Set());
+                interventionMap.get(nct).add(intv);
+            }
+        }
+
+        nctInfoMap.clear();
+        for (const row of infoRows) {
+            const nct = cleanStr(row['Nct_id'] || row['NCT_ID'] || row['nct_id'] || '');
+            if (!nct) continue;
+            const record = {};
+            const fields = ['Nct_id', 'Study Title', 'Study URL', 'Conditions', 'Interventions'];
+            for (const f of fields) {
+                let val = row[f];
+                if (val === undefined) {
+                    const lower = f.toLowerCase();
+                    for (const key of Object.keys(row)) {
+                        if (key.toLowerCase() === lower) { val = row[key]; break; }
+                    }
+                }
+                record[f] = cleanStr(val);
+            }
+            record['Nct_id'] = nct;
+            nctInfoMap.set(nct, record);
+        }
+
+        if (!conditionMap.size) throw new Error('No valid entries in Condition sheet');
+        if (!interventionMap.size) throw new Error('No valid entries in Intervention sheet');
+        if (!nctInfoMap.size) throw new Error('No valid entries in NCT_info sheet');
+
+        buildMaps();
+        excelLoaded = true;
+        setStatus(`✅ Loaded: ${conditionMap.size} condition entries, ${interventionMap.size} intervention entries, ${nctInfoMap.size} trial details.`, false);
+        return true;
+    }
+
+    async function loadFromFile(file) {
+        if (!file) return false;
+        setStatus(`⏳ Parsing ${file.name} ...`, false);
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array', cellDates: false, defval: "" });
+            parseWorkbook(workbook);
+            fileInfoDiv.innerHTML = `✅ Loaded: ${file.name}`;
+            fileInfoDiv.style.background = "#d1fae5";
+            conditionInput.value = '';
+            interventionInput.value = '';
+            condHint.textContent = 'Type a condition to filter interventions';
+            intHint.textContent = 'Interventions will appear here';
+            resultArea.innerHTML = `<div class="empty-msg">📊 Data ready. Type a Condition — Intervention dropdown updates automatically.</div>`;
+            hideAllSuggestions();
+            setControlsEnabled(true);
+            return true;
+        } catch (err) {
+            console.error(err);
+            setStatus(`❌ Parse error: ${err.message}`, true);
+            excelLoaded = false;
+            fileInfoDiv.innerHTML = `⚠️ Load failed`;
+            fileInfoDiv.style.background = "#fee2e2";
+            setControlsEnabled(false);
+            resultArea.innerHTML = '';
+            return false;
+        }
+    }
+
+    // ---------- Event bindings ----------
+    function onSearch() {
+        if (!excelLoaded) { setStatus('Please upload an Excel file first.', true); return; }
+        const cond = conditionInput.value.trim();
+        const intv = interventionInput.value.trim();
+        if (!cond || !intv) { setStatus('⚠️ Please enter both Condition and Intervention.', false); return; }
+        if (!allConditionTerms.has(cond)) {
+            setStatus(`❓ Condition “${escapeHtml(cond)}” not found. Please select from suggestions.`, false);
+            return;
+        }
+        if (!allInterventionTerms.has(intv)) {
+            setStatus(`❓ Intervention “${escapeHtml(intv)}” not found. Please select from suggestions.`, false);
+            return;
+        }
+        const result = queryCooccurrence(cond, intv);
+        renderResults(result, cond, intv);
+    }
+
+    function onReset() {
+        conditionInput.value = '';
+        interventionInput.value = '';
+        condHint.textContent = 'Type a condition to filter interventions';
+        intHint.textContent = 'Interventions will appear here';
+        hideAllSuggestions();
+        resultArea.innerHTML = `<div class="empty-msg">✨ Cleared. Enter new query terms.</div>`;
+        setStatus('✅ Query cleared.', false);
+    }
+
+    function setupDynamicHandlers() {
+        conditionInput.addEventListener('input', function(e) {
+            if (!excelLoaded) return;
+            const val = this.value;
+            showConditionSuggestions(val);
+            populateInterventionDropdown(val);
+            if (val) {
+                const count = getCooccurringInterventions(val).size;
+                condHint.textContent = `🔍 "${val}" — ${count} co-occurring intervention(s)`;
+            } else {
+                condHint.textContent = 'Type a condition to filter interventions';
+            }
+            // Update graph live
+            const cond = conditionInput.value.trim();
+            const intv = interventionInput.value.trim();
+            if (cond || intv) {
+                const graphData = buildCooccurrenceGraph(cond, intv);
+                renderGraphOnly(graphData);
+            }
+        });
+
+        interventionInput.addEventListener('input', function(e) {
+            if (!excelLoaded) return;
+            const val = this.value;
+            showInterventionSuggestions(val);
+            populateConditionDropdown(val);
+            // Update graph live
+            const cond = conditionInput.value.trim();
+            const intv = interventionInput.value.trim();
+            if (cond || intv) {
+                const graphData = buildCooccurrenceGraph(cond, intv);
+                renderGraphOnly(graphData);
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!condSugg.contains(e.target) && e.target !== conditionInput) {
+                condSugg.classList.remove('active');
+            }
+            if (!intSugg.contains(e.target) && e.target !== interventionInput) {
+                intSugg.classList.remove('active');
+            }
+        });
+
+        conditionInput.addEventListener('focus', function() {
+            if (!excelLoaded) return;
+            const val = this.value;
+            if (val) {
+                showConditionSuggestions(val);
+                populateInterventionDropdown(val);
+            }
+        });
+
+        interventionInput.addEventListener('focus', function() {
+            if (!excelLoaded) return;
+            const val = this.value;
+            if (val) {
+                showInterventionSuggestions(val);
+                populateConditionDropdown(val);
+            }
+        });
+    }
+
+    fileInput.addEventListener('change', async function(e) {
+        if (this.files && this.files.length) {
+            await loadFromFile(this.files[0]);
+            this.value = '';
+        }
+    });
+
+    function init() {
+        setControlsEnabled(false);
+        setupDynamicHandlers();
+        searchBtn.addEventListener('click', onSearch);
+        resetBtn.addEventListener('click', onReset);
+        setStatus('📌 Please upload an Excel file with three sheets: "Condition", "Intervention", "NCT_info".', false);
+    }
+    init();
+</script>
+</body>
+</html>

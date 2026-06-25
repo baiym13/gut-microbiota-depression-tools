@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Literature Co-occurrence · Dual Keyword + Knowledge Graph</title>
+    <!-- SheetJS core library -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <!-- D3.js v7 for force-directed graph -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
+        body {
+            background: #f0f4f8;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1rem;
+        }
+        .card {
+            max-width: 1500px;
+            width: 100%;
+            background: white;
+            border-radius: 2rem;
+            box-shadow: 0 20px 35px -12px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a3c5e 0%, #0f2c44 100%);
+            padding: 1.8rem 2rem;
+            color: white;
+        }
+        .header h1 { margin: 0 0 0.4rem 0; font-weight: 600; font-size: 1.9rem; letter-spacing: -0.3px; }
+        .header p { margin: 0; opacity: 0.85; font-size: 0.95rem; }
+        .content { padding: 2rem; }
+        .upload-area {
+            background: #f8fafc;
+            border-radius: 1.5rem;
+            border: 1px dashed #cbd5e1;
+            padding: 1.2rem 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .upload-label {
+            background: #2c7da0;
+            color: white;
+            padding: 0.6rem 1.4rem;
+            border-radius: 2rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: none;
+        }
+        .upload-label:hover { background: #1f5e7a; transform: translateY(-1px); }
+        #fileInput { display: none; }
+        .file-info {
+            font-size: 0.85rem;
+            color: #2c5f8a;
+            background: #eef2ff;
+            padding: 0.4rem 1rem;
+            border-radius: 2rem;
+        }
+        .query-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            background: #f9fafc;
+            padding: 1.5rem;
+            border-radius: 1.5rem;
+            border: 1px solid #e2e8f0;
+        }
+        .input-group {
+            flex: 1;
+            min-width: 220px;
+            position: relative;
+        }
+        .input-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #0f2c44;
+            font-size: 0.9rem;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 1rem;
+            font-size: 0.95rem;
+            transition: 0.2s;
+            background: white;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #2c7da0;
+            box-shadow: 0 0 0 3px rgba(44,125,160,0.2);
+        }
+        .input-group input:disabled { background: #f1f5f9; color: #64748b; }
+        .suggestions-box {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 1rem;
+            max-height: 240px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+            margin-top: 4px;
+            display: none;
+        }
+        .suggestions-box.active { display: block; }
+        .suggestion-item {
+            padding: 0.7rem 1rem;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f2f5;
+            font-size: 0.85rem;
+            transition: 0.05s linear;
+        }
+        .suggestion-item:hover { background-color: #e6f0f5; }
+        .suggestion-item:last-child { border-bottom: none; }
+
+        .button-group {
+            display: flex;
+            align-items: flex-end;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #2c7da0;
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 0.8rem 1.6rem;
+            border-radius: 2rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        button:hover:not(:disabled) { background: #1f5e7a; transform: translateY(-1px); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        button.secondary { background: #4b5563; }
+        button.secondary:hover:not(:disabled) { background: #374151; }
+        .status {
+            margin: 1rem 0;
+            padding: 0.8rem 1rem;
+            border-radius: 1rem;
+            background: #eef2ff;
+            color: #1e3a8a;
+            font-size: 0.9rem;
+            border-left: 4px solid #2c7da0;
+            word-break: break-word;
+        }
+        .result-container { margin-top: 1.5rem; }
+        .stats-card {
+            background: #eef2ff;
+            border-radius: 1.2rem;
+            padding: 0.8rem 1.2rem;
+            margin-bottom: 1.5rem;
+            display: inline-block;
+            font-weight: 500;
+        }
+        .wos-list {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 1.2rem;
+            overflow-x: auto;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th {
+            background: #f1f5f9;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: #1e293b;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        td {
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid #f0f2f5;
+            vertical-align: top;
+            word-break: break-word;
+        }
+        tr:last-child td { border-bottom: none; }
+        .link-btn {
+            background: #e9f0f5;
+            color: #1f5e7a;
+            text-decoration: none;
+            padding: 0.4rem 0.9rem;
+            border-radius: 2rem;
+            font-weight: 500;
+            font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: 0.1s;
+            border: 1px solid #cbdde6;
+        }
+        .link-btn:hover { background: #cfe3ed; color: #0f3b4f; }
+        .badge {
+            background: #dbeafe;
+            padding: 0.2rem 0.6rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #1e40af;
+        }
+        .empty-msg {
+            padding: 2rem;
+            text-align: center;
+            color: #5f6c7a;
+            font-style: italic;
+        }
+
+        /* Graph container */
+        .graph-container {
+            margin: 1.5rem 0 0.5rem 0;
+            padding: 0.8rem;
+            background: #fafcfe;
+            border-radius: 1.5rem;
+            border: 1px solid #e2e8f0;
+            width: 100%;
+            overflow-x: auto;
+        }
+        .graph-container svg {
+            display: block;
+            margin: 0 auto;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        }
+        .graph-title {
+            font-weight: 600;
+            margin-bottom: 0.6rem;
+            color: #0f2c44;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .graph-title small {
+            font-weight: 400;
+            font-size: 0.8rem;
+            color: #4a5c6e;
+        }
+        .legend-tip {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+            color: #2c4c6e;
+            background: #eef6fa;
+            padding: 0.2rem 1rem;
+            border-radius: 2rem;
+        }
+        .legend-tip span {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #2c7da0;
+        }
+        .legend-tip span.gray {
+            background: #9aa9b9;
+        }
+        footer {
+            font-size: 0.75rem;
+            text-align: center;
+            border-top: 1px solid #e9edf2;
+            padding: 1rem;
+            color: #6c7a8a;
+            background: #fafcff;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="header">
+        <h1>📚 Dual Keyword Co‑occurrence · Literature Filter + Knowledge Graph</h1>
+        <p>Upload Excel (fields: WOS, Standard_Keyword, Article Title, DOI, Pubmed Id) · Enter two Standard_Keyword to find co‑occurring papers, and visualize the co‑occurrence network of the first keyword</p>
+    </div>
+    <div class="content">
+        <!-- Upload area -->
+        <div class="upload-area">
+            <label class="upload-label" for="fileInput">📂 Select Excel file (.xlsx, .xls)</label>
+            <input type="file" id="fileInput" accept=".xlsx, .xls">
+            <div id="fileInfo" class="file-info">No file loaded</div>
+        </div>
+
+        <!-- Dual keyword query panel -->
+        <div class="query-panel">
+            <div class="input-group" id="keywordGroup1">
+                <label>🔑 Standard_Keyword ①</label>
+                <input type="text" id="keywordInput1" placeholder="e.g. gut microbiota" autocomplete="off" disabled>
+                <div id="keywordSuggestions1" class="suggestions-box"></div>
+            </div>
+            <div class="input-group" id="keywordGroup2">
+                <label>🔑 Standard_Keyword ②</label>
+                <input type="text" id="keywordInput2" placeholder="e.g. inflammation" autocomplete="off" disabled>
+                <div id="keywordSuggestions2" class="suggestions-box"></div>
+            </div>
+            <div class="button-group">
+                <button id="searchBtn" disabled>🔍 Query Co‑occurrence</button>
+                <button id="resetBtn" class="secondary" disabled>⟳ Clear</button>
+            </div>
+        </div>
+
+        <div id="statusMessage" class="status">
+            📌 Please upload an Excel file containing fields: WOS, Standard_Keyword, Article Title, DOI, Pubmed Id
+        </div>
+
+        <div id="resultArea" class="result-container"></div>
+    </div>
+    <footer>
+        ⚡ Filters papers based on co‑occurrence of two Standard_Keyword · Displays WOS, Title, DOI & PubMed links · Graph node size = co‑occurrence count
+    </footer>
+</div>
+
+<script>
+    // ---------- Global data ----------
+    let allRecords = [];              // { WOS, Standard_Keyword, Article_Title, DOI, Pubmed_Id }
+    let keywordUniqueSet = new Set();
+    let excelLoaded = false;
+
+    // DOM elements
+    const keywordInput1 = document.getElementById('keywordInput1');
+    const keywordInput2 = document.getElementById('keywordInput2');
+    const searchBtn = document.getElementById('searchBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusDiv = document.getElementById('statusMessage');
+    const resultArea = document.getElementById('resultArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfoDiv = document.getElementById('fileInfo');
+    const suggDiv1 = document.getElementById('keywordSuggestions1');
+    const suggDiv2 = document.getElementById('keywordSuggestions2');
+
+    // Helpers
+    function setStatus(msg, isError = false) {
+        statusDiv.innerHTML = msg;
+        statusDiv.style.background = isError ? '#fee2e2' : '#eef2ff';
+        statusDiv.style.borderLeftColor = isError ? '#dc2626' : '#2c7da0';
+        statusDiv.style.color = isError ? '#991b1b' : '#1e3a8a';
+    }
+
+    function cleanStr(str) {
+        if (str === undefined || str === null) return '';
+        return String(str).trim();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m] || m));
+    }
+
+    function setControlsEnabled(enabled) {
+        [keywordInput1, keywordInput2].forEach(inp => inp.disabled = !enabled);
+        searchBtn.disabled = !enabled;
+        resetBtn.disabled = !enabled;
+    }
+
+    function updateKeywordSet() {
+        keywordUniqueSet.clear();
+        for (const rec of allRecords) {
+            if (rec.Standard_Keyword) keywordUniqueSet.add(rec.Standard_Keyword);
+        }
+    }
+
+    // Show suggestions dropdown
+    function showSuggestions(inputElement, suggestionsSet, suggestionsDiv, filterText = null) {
+        const inputVal = filterText !== undefined ? filterText : inputElement.value;
+        const searchTerm = cleanStr(inputVal).toLowerCase();
+        if (!searchTerm || suggestionsSet.size === 0) {
+            suggestionsDiv.classList.remove('active');
+            suggestionsDiv.innerHTML = '';
+            return;
+        }
+        const matched = Array.from(suggestionsSet)
+            .filter(item => item.toLowerCase().includes(searchTerm))
+            .sort((a, b) => a.localeCompare(b));
+        if (matched.length === 0) {
+            suggestionsDiv.classList.remove('active');
+            suggestionsDiv.innerHTML = '';
+            return;
+        }
+        const limited = matched.slice(0, 15);
+        suggestionsDiv.innerHTML = limited.map(term => `<div class="suggestion-item">${escapeHtml(term)}</div>`).join('');
+        suggestionsDiv.classList.add('active');
+
+        const items = suggestionsDiv.querySelectorAll('.suggestion-item');
+        items.forEach(item => {
+            item.addEventListener('click', (e) => {
+                const selected = item.innerText;
+                inputElement.value = selected;
+                suggestionsDiv.classList.remove('active');
+                inputElement.focus();
+            });
+        });
+    }
+
+    function hideAllSuggestions() {
+        suggDiv1.classList.remove('active');
+        suggDiv2.classList.remove('active');
+    }
+
+    // ---------- Parse Excel ----------
+    function parseWorkbook(workbook) {
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) throw new Error('No worksheet found in Excel file');
+        const sheet = workbook.Sheets[sheetName];
+        let rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        if (!rows || rows.length === 0) throw new Error('Worksheet is empty');
+
+        const records = [];
+        for (const row of rows) {
+            const wos = cleanStr(row['WOS'] || row['Wos'] || row['wos'] || '');
+            const stdKw = cleanStr(row['Standard_Keyword'] || row['Standard keyword'] || row['standard_keyword'] || '');
+            const title = cleanStr(row['Article Title'] || row['Article_Title'] || row['article title'] || '');
+            const doi = cleanStr(row['DOI'] || row['Doi'] || row['doi'] || '');
+            const pmid = cleanStr(row['Pubmed Id'] || row['Pubmed_ID'] || row['pubmed id'] || '');
+            if (wos && stdKw) {
+                records.push({
+                    WOS: wos,
+                    Standard_Keyword: stdKw,
+                    Article_Title: title,
+                    DOI: doi,
+                    Pubmed_Id: pmid
+                });
+            }
+        }
+        if (records.length === 0) throw new Error('No valid records found (require WOS and Standard_Keyword)');
+        allRecords = records;
+        updateKeywordSet();
+        excelLoaded = true;
+        setStatus(`✅ Loaded ${allRecords.length} records. Enter two Standard_Keyword to find co‑occurring papers.`, false);
+        return true;
+    }
+
+    async function loadFromFile(file) {
+        if (!file) return false;
+        setStatus(`⏳ Parsing ${file.name} ...`, false);
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array', cellDates: false, defval: "" });
+            parseWorkbook(workbook);
+            fileInfoDiv.innerHTML = `✅ Loaded: ${file.name}`;
+            fileInfoDiv.style.background = "#d1fae5";
+            keywordInput1.value = '';
+            keywordInput2.value = '';
+            resultArea.innerHTML = `<div class="empty-msg">📊 Data ready. Enter two Standard_Keyword to query co‑occurrence.</div>`;
+            hideAllSuggestions();
+            setControlsEnabled(true);
+            return true;
+        } catch (err) {
+            console.error(err);
+            setStatus(`❌ Parse error: ${err.message}`, true);
+            excelLoaded = false;
+            allRecords = [];
+            keywordUniqueSet.clear();
+            fileInfoDiv.innerHTML = `⚠️ Load failed`;
+            fileInfoDiv.style.background = "#fee2e2";
+            setControlsEnabled(false);
+            resultArea.innerHTML = '';
+            return false;
+        }
+    }
+
+    // ---------- Core query: co‑occurrence of two Standard_Keyword ----------
+    function queryCooccurrence(kw1, kw2) {
+        if (!excelLoaded || allRecords.length === 0) {
+            return { commonWOS: [], details: [] };
+        }
+        const k1 = cleanStr(kw1);
+        const k2 = cleanStr(kw2);
+        if (!k1 || !k2) return { commonWOS: [], details: [] };
+
+        const set1 = new Set();
+        const set2 = new Set();
+        const wosToDetail = new Map();
+
+        for (const rec of allRecords) {
+            const kw = rec.Standard_Keyword;
+            if (kw.localeCompare(k1, undefined, { sensitivity: 'base' }) === 0) {
+                set1.add(rec.WOS);
+                if (!wosToDetail.has(rec.WOS)) {
+                    wosToDetail.set(rec.WOS, {
+                        Article_Title: rec.Article_Title || '',
+                        DOI: rec.DOI || '',
+                        Pubmed_Id: rec.Pubmed_Id || ''
+                    });
+                }
+            }
+            if (kw.localeCompare(k2, undefined, { sensitivity: 'base' }) === 0) {
+                set2.add(rec.WOS);
+                if (!wosToDetail.has(rec.WOS)) {
+                    wosToDetail.set(rec.WOS, {
+                        Article_Title: rec.Article_Title || '',
+                        DOI: rec.DOI || '',
+                        Pubmed_Id: rec.Pubmed_Id || ''
+                    });
+                }
+            }
+        }
+
+        const commonWOS = [...set1].filter(wos => set2.has(wos));
+        const details = commonWOS.map(wos => {
+            const detail = wosToDetail.get(wos) || { Article_Title: '', DOI: '', Pubmed_Id: '' };
+            return { WOS: wos, ...detail };
+        });
+
+        return { commonWOS, details };
+    }
+
+    // ---------- Build co‑occurrence graph for the first keyword (node size = count) ----------
+    function buildCooccurrenceGraph(targetKeyword) {
+        const kw = cleanStr(targetKeyword);
+        if (!kw || !excelLoaded) return { nodes: [], links: [] };
+
+        // 1. Collect all WOS that contain targetKeyword
+        const wosSet = new Set();
+        for (const rec of allRecords) {
+            if (rec.Standard_Keyword.localeCompare(kw, undefined, { sensitivity: 'base' }) === 0) {
+                wosSet.add(rec.WOS);
+            }
+        }
+        if (wosSet.size === 0) return { nodes: [], links: [] };
+
+        // 2. Count co-occurrence for each keyword (excluding itself)
+        const cooccMap = new Map();  // keyword -> count
+        for (const rec of allRecords) {
+            if (!wosSet.has(rec.WOS)) continue;
+            const otherKw = rec.Standard_Keyword;
+            if (otherKw.localeCompare(kw, undefined, { sensitivity: 'base' }) === 0) continue;
+            cooccMap.set(otherKw, (cooccMap.get(otherKw) || 0) + 1);
+        }
+
+        // 3. Build nodes and links
+        // Center node: fixed size 40, others scale with count
+        const nodes = [{ id: kw, group: 0, size: 40, count: 0 }];
+        const links = [];
+        for (const [other, count] of cooccMap.entries()) {
+            if (count > 0) {
+                // Node size is proportional to count (min 12, max 40)
+                const nodeSize = Math.max(12, Math.min(40, 8 + count * 3));
+                nodes.push({ id: other, group: 1, size: nodeSize, count: count });
+                links.push({ source: kw, target: other, value: count });
+            }
+        }
+        return { nodes, links };
+    }
+
+    // ---------- Render force-directed graph with D3 (node size = count) ----------
+    function renderGraph(graphData, containerId = 'graphContainer') {
+        d3.select(`#${containerId}`).selectAll('*').remove();
+
+        if (!graphData || graphData.nodes.length <= 1) {
+            d3.select(`#${containerId}`)
+                .append('div')
+                .style('padding', '1.5rem')
+                .style('text-align', 'center')
+                .style('color', '#6b7a8a')
+                .text('⚠️ No co-occurring keywords found. Graph is empty.');
+            return;
+        }
+
+        const width = 820, height = 480;
+        const svg = d3.select(`#${containerId}`)
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height)
+            .style('background', '#ffffff')
+            .style('border-radius', '12px');
+
+        const g = svg.append('g');
+
+        // Force simulation
+        const simulation = d3.forceSimulation(graphData.nodes)
+            .force('charge', d3.forceManyBody().strength(-250))
+            .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(130))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide(40));
+
+        // Links (lines)
+        const link = g.append('g')
+            .selectAll('line')
+            .data(graphData.links)
+            .enter().append('line')
+            .attr('stroke', '#9aa9b9')
+            .attr('stroke-width', 2)
+            .attr('stroke-opacity', 0.7);
+
+        // Link text (count)
+        const linkText = g.append('g')
+            .selectAll('text')
+            .data(graphData.links)
+            .enter().append('text')
+            .attr('fill', '#1f3a5e')
+            .attr('font-size', '10px')
+            .attr('font-weight', 'bold')
+            .attr('text-anchor', 'middle')
+            .attr('dy', -6)
+            .text(d => d.value);
+
+        // Nodes (circles) with size = node.size
+        const node = g.append('g')
+            .selectAll('circle')
+            .data(graphData.nodes)
+            .enter().append('circle')
+            .attr('r', d => d.size || 18)
+            .attr('fill', d => d.group === 0 ? '#1f5e7a' : '#4f8aa8')
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 2)
+            .call(d3.drag()
+                .on('start', (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                })
+                .on('drag', (event, d) => {
+                    d.fx = event.x;
+                    d.fy = event.y;
+                })
+                .on('end', (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0);
+                    d.fx = null;
+                    d.fy = null;
+                })
+            );
+
+        // Node labels
+        const label = g.append('g')
+            .selectAll('text')
+            .data(graphData.nodes)
+            .enter().append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', d => (d.size || 18) + 6)
+            .attr('fill', '#1f2a3a')
+            .attr('font-size', d => d.group === 0 ? '12px' : '9px')
+            .attr('font-weight', d => d.group === 0 ? 'bold' : 'normal')
+            .text(d => d.id.length > 18 ? d.id.slice(0, 16) + '…' : d.id);
+
+        // Update positions on tick
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            linkText
+                .attr('x', d => (d.source.x + d.target.x) / 2)
+                .attr('y', d => (d.source.y + d.target.y) / 2 - 8);
+
+            node
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
+
+            label
+                .attr('x', d => d.x)
+                .attr('y', d => d.y + (d.size || 18) + 6);
+        });
+
+        // Tooltip on hover
+        node.append('title')
+            .text(d => `${d.id} (co-occurrence: ${d.count || 0})`);
+    }
+
+    // ---------- Render results (table + graph) ----------
+    function renderResults(queryResult, kw1, kw2) {
+        const { commonWOS, details } = queryResult;
+        const graphData = buildCooccurrenceGraph(kw1);
+
+        let html = '';
+
+        // Table part
+        if (!commonWOS.length) {
+            html += `<div class="empty-msg">🔍 No papers found containing both “${escapeHtml(kw1)}” and “${escapeHtml(kw2)}”.</div>`;
+        } else {
+            let rowsHtml = '';
+            for (const item of details) {
+                const title = escapeHtml(item.Article_Title || '—');
+                const doi = escapeHtml(item.DOI || '');
+                const pmid = escapeHtml(item.Pubmed_Id || '');
+                const doiLink = doi ? `https://doi.org/${doi}` : '#';
+                const pmidLink = pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : '#';
+
+                rowsHtml += `
+                    <tr>
+                        <td><strong>${escapeHtml(item.WOS)}</strong></td>
+                        <td>${title}</td>
+                        <td>
+                            ${doi ? `<a href="${doiLink}" target="_blank" class="link-btn" style="margin-right:6px;">DOI</a>` : '<span class="badge" style="background:#f1f3f5;">—</span>'}
+                            ${pmid ? `<a href="${pmidLink}" target="_blank" class="link-btn">PubMed</a>` : ''}
+                        </td>
+                    </tr>
+                `;
+            }
+
+            html += `
+                <div class="stats-card">
+                    📊 Co‑occurrence: <strong>“${escapeHtml(kw1)}”</strong> ∩ <strong>“${escapeHtml(kw2)}”</strong><br>
+                    🎯 <strong>${commonWOS.length}</strong> paper(s) found
+                </div>
+                <div class="wos-list">
+                    <table>
+                        <thead><tr><th>WOS</th><th>Article Title</th><th>Links (DOI / PubMed)</th></tr></thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // Graph part
+        const hasGraph = graphData.nodes.length > 1;
+        html += `<div class="graph-container" id="graphContainerWrapper">
+                    <div class="graph-title">
+                        <span>🧬 Co‑occurrence graph with “${escapeHtml(kw1)}”</span>
+                        <small>Node size = co‑occurrence count, edge label = count</small>
+                        <span class="legend-tip"><span></span> Center <span class="gray"></span> Co‑occurring</span>
+                    </div>
+                    <div id="graphContainer" style="width:100%; min-height:200px;"></div>
+                </div>`;
+
+        resultArea.innerHTML = html;
+
+        if (hasGraph) {
+            renderGraph(graphData, 'graphContainer');
+        } else {
+            const container = document.getElementById('graphContainer');
+            if (container) {
+                container.innerHTML = `<div style="padding:2rem;text-align:center;color:#6b7a8a;">🔹 No co‑occurring keywords detected for “${escapeHtml(kw1)}”.</div>`;
+            }
+        }
+
+        setStatus(`✅ Query complete! ${commonWOS.length} co‑occurring paper(s) found. Graph updated.`, false);
+    }
+
+    // ---------- Event binding ----------
+    function onSearch() {
+        if (!excelLoaded) {
+            setStatus('Please upload an Excel file first.', true);
+            return;
+        }
+        const kw1 = keywordInput1.value.trim();
+        const kw2 = keywordInput2.value.trim();
+        if (!kw1 || !kw2) {
+            setStatus('⚠️ Please enter both Standard_Keyword fields.', false);
+            return;
+        }
+        if (!keywordUniqueSet.has(kw1)) {
+            setStatus(`❓ Keyword “${escapeHtml(kw1)}” not found in data. Please select from suggestions.`, false);
+            return;
+        }
+        if (!keywordUniqueSet.has(kw2)) {
+            setStatus(`❓ Keyword “${escapeHtml(kw2)}” not found in data. Please select from suggestions.`, false);
+            return;
+        }
+        const result = queryCooccurrence(kw1, kw2);
+        renderResults(result, kw1, kw2);
+    }
+
+    function onReset() {
+        keywordInput1.value = '';
+        keywordInput2.value = '';
+        hideAllSuggestions();
+        resultArea.innerHTML = `<div class="empty-msg">✨ Cleared. You can enter new keywords.</div>`;
+        setStatus('✅ Query conditions cleared.', false);
+    }
+
+    // Autocomplete listeners
+    function initAutoComplete() {
+        keywordInput1.addEventListener('input', (e) => {
+            if (!excelLoaded) return;
+            showSuggestions(keywordInput1, keywordUniqueSet, suggDiv1, e.target.value);
+        });
+        keywordInput2.addEventListener('input', (e) => {
+            if (!excelLoaded) return;
+            showSuggestions(keywordInput2, keywordUniqueSet, suggDiv2, e.target.value);
+        });
+        document.addEventListener('click', function(e) {
+            if (!suggDiv1.contains(e.target) && e.target !== keywordInput1) suggDiv1.classList.remove('active');
+            if (!suggDiv2.contains(e.target) && e.target !== keywordInput2) suggDiv2.classList.remove('active');
+        });
+        keywordInput1.addEventListener('blur', () => setTimeout(() => suggDiv1.classList.remove('active'), 150));
+        keywordInput2.addEventListener('blur', () => setTimeout(() => suggDiv2.classList.remove('active'), 150));
+    }
+
+    // File upload
+    fileInput.addEventListener('change', async (e) => {
+        if (e.target.files && e.target.files.length) {
+            const file = e.target.files[0];
+            await loadFromFile(file);
+            fileInput.value = '';
+        }
+    });
+
+    // Initialize
+    function init() {
+        setControlsEnabled(false);
+        initAutoComplete();
+        searchBtn.addEventListener('click', onSearch);
+        resetBtn.addEventListener('click', onReset);
+        setStatus('📌 Please upload an Excel file with fields: WOS, Standard_Keyword, Article Title, DOI, Pubmed Id', false);
+    }
+    init();
+</script>
+</body>
+</html>
