@@ -54,11 +54,12 @@ Click any link below to launch the corresponding tool and automatically execute 
 
 ### Standard Workflow
 
-1. Launch any tool by clicking the corresponding link in the tool overview table above.
-2. The tool will automatically load the underlying dataset from the GitHub repository.
-3. Enter your target keywords, conditions, or taxa into the input fields.
-4. Click the **Search** or **Analyze** button to execute the query.
-5. Results are displayed as interactive tables and knowledge graphs.
+1. Download all Excel data files from the repository to your local machine.
+2. Launch any tool by clicking the corresponding link in the tool overview table above.
+3. Upload the Excel files downloaded in Step 1 — or files containing the same structured information — directly into the corresponding tool interface as prompted.
+4. Enter your target keywords, conditions, or taxa into the input fields.
+5. Click the **Search** or **Analyze** button to execute the query.
+6. Results are displayed as interactive tables and knowledge graphs.
 
 ### One-Click Query Workflow
 
